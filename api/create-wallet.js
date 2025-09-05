@@ -18,34 +18,39 @@ export default async function handler(req, res) {
     console.log('✅ Env vars - envId exists:', !!envId, 'secret exists:', !!secret);
     if (!envId || !secret) return res.status(500).json({ success:false, error:'server missing env vars' });
 
-    // 1) Create Dynamic user
-    console.log('📧 Creating Dynamic user for:', email);
-    const userResp = await fetch('https://app.dynamic.xyz/api/v0/users', {
+    // Test different Dynamic API endpoints
+    console.log('🔍 Testing Dynamic API connectivity...');
+    
+    // Try the user creation endpoint first
+    console.log('📧 Attempting user creation with endpoint: https://app.dynamic.xyz/api/v0/users');
+    const testUserResp = await fetch('https://app.dynamic.xyz/api/v0/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${secret}` },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Authorization': `Bearer ${secret}`,
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ email, environmentId: envId })
     });
-    console.log('📧 User creation response status:', userResp.status);
-    if (!userResp.ok) {
-      const errorText = await userResp.text();
-      console.log('❌ User creation failed:', errorText);
-      return fail(res, errorText);
+    
+    console.log('📧 Response status:', testUserResp.status);
+    console.log('📧 Response headers:', Object.fromEntries(testUserResp.headers));
+    
+    const responseText = await testUserResp.text();
+    console.log('📧 Response body:', responseText);
+    
+    if (!testUserResp.ok) {
+      return fail(res, `Dynamic API error: ${testUserResp.status} - ${responseText}`);
     }
-    const user = await userResp.json();
-    console.log('✅ User created:', user);
-    const userId = user?.id || user?.data?.id;
-
-    // 2) Create embedded Solana wallet
-    const walletResp = await fetch('https://app.dynamic.xyz/api/v0/wallets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${secret}` },
-      body: JSON.stringify({ userId, chain: 'solana', walletType: 'embedded', environmentId: envId })
+    
+    // For now, just return success with the response we got
+    return ok(res, { 
+      success: true, 
+      debug: true,
+      status: testUserResp.status,
+      response: responseText,
+      message: 'API call successful but needs parsing'
     });
-    if (!walletResp.ok) return fail(res, await walletResp.text());
-    const wallet = await walletResp.json();
-
-    const address = wallet?.address || wallet?.data?.address || wallet?.wallet?.address;
-    return ok(res, { success:true, userId, address });
   } catch (e) {
     return fail(res, e?.message || String(e));
   }
