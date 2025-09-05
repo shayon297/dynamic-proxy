@@ -60,45 +60,57 @@ export default async function handler(req, res) {
           const userId = userData?.id || userData?.data?.id || userData?.user?.id;
           if (userId) {
             console.log(`🔑 Creating wallet for user: ${userId}`);
-            const walletEndpoint = endpoint.replace('/users', '/wallets');
-            const walletResp = await fetch(walletEndpoint, {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${secret}`,
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                userId,
-                chain: 'solana',
-                walletType: 'embedded'
-              })
-            });
             
-            console.log(`🔑 Wallet creation status: ${walletResp.status}`);
-            const walletText = await walletResp.text();
-            console.log(`🔑 Wallet response: ${walletText.substring(0, 200)}...`);
+            // Try different wallet endpoint patterns
+            const walletEndpoints = [
+              endpoint.replace('/users', '/wallets'), // Same pattern as user endpoint
+              `https://app.dynamic.xyz/api/v0/wallets`, // Global wallet endpoint
+              `https://app.dynamic.xyz/api/v0/environments/${envId}/wallets` // Environment-specific
+            ];
             
-            if (walletResp.ok) {
-              const walletData = JSON.parse(walletText);
-              const address = walletData?.address || walletData?.data?.address || walletData?.wallet?.address;
-              return ok(res, { 
-                success: true, 
-                userId, 
-                address,
-                endpoint: endpoint,
-                message: 'Dynamic wallet created successfully!'
+            for (const walletEndpoint of walletEndpoints) {
+              console.log(`🔑 Trying wallet endpoint: ${walletEndpoint}`);
+              
+              const walletBody = walletEndpoint.includes(envId) && !walletEndpoint.includes('/wallets')
+                ? { userId, chain: 'solana', walletType: 'embedded' }
+                : { userId, chain: 'solana', walletType: 'embedded', environmentId: envId };
+                
+              const walletResp = await fetch(walletEndpoint, {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json', 
+                  'Authorization': `Bearer ${secret}`,
+                  'Accept': 'application/json'
+                },
+                body: JSON.stringify(walletBody)
               });
-            } else {
-              return ok(res, { 
-                success: true, 
-                userId,
-                endpoint: endpoint,
-                userCreated: true,
-                walletError: walletText,
-                message: 'User created but wallet creation failed'
-              });
+              
+              console.log(`🔑 Wallet creation status: ${walletResp.status}`);
+              const walletText = await walletResp.text();
+              console.log(`🔑 Wallet response: ${walletText.substring(0, 200)}...`);
+              
+              if (walletResp.ok) {
+                const walletData = JSON.parse(walletText);
+                const address = walletData?.address || walletData?.data?.address || walletData?.wallet?.address;
+                return ok(res, { 
+                  success: true, 
+                  userId, 
+                  address,
+                  userEndpoint: endpoint,
+                  walletEndpoint: walletEndpoint,
+                  message: 'Dynamic wallet created successfully!'
+                });
+              }
             }
+            
+            // If we get here, all wallet endpoints failed
+            return ok(res, { 
+              success: true, 
+              userId,
+              userEndpoint: endpoint,
+              userCreated: true,
+              message: 'User created but all wallet endpoints failed'
+            });
           }
           
           return ok(res, { 
