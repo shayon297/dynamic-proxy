@@ -18,39 +18,50 @@ export default async function handler(req, res) {
     console.log('✅ Env vars - envId exists:', !!envId, 'secret exists:', !!secret);
     if (!envId || !secret) return res.status(500).json({ success:false, error:'server missing env vars' });
 
-    // Test different Dynamic API endpoints
-    console.log('🔍 Testing Dynamic API connectivity...');
+    // Test different Dynamic API endpoint variations
+    console.log('🔍 Testing various Dynamic API endpoints...');
     
-    // Try the user creation endpoint first
-    console.log('📧 Attempting user creation with endpoint: https://app.dynamic.xyz/api/v0/users');
-    const testUserResp = await fetch('https://app.dynamic.xyz/api/v0/users', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json', 
-        'Authorization': `Bearer ${secret}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ email, environmentId: envId })
-    });
+    const endpoints = [
+      'https://app.dynamic.xyz/api/v0/users',
+      'https://api.dynamic.xyz/v0/users', 
+      'https://app.dynamic.xyz/api/users',
+      'https://api.dynamic.xyz/users'
+    ];
     
-    console.log('📧 Response status:', testUserResp.status);
-    console.log('📧 Response headers:', Object.fromEntries(testUserResp.headers));
-    
-    const responseText = await testUserResp.text();
-    console.log('📧 Response body:', responseText);
-    
-    if (!testUserResp.ok) {
-      return fail(res, `Dynamic API error: ${testUserResp.status} - ${responseText}`);
+    for (const endpoint of endpoints) {
+      console.log(`🧪 Testing endpoint: ${endpoint}`);
+      try {
+        const testResp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${secret}`,
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ email, environmentId: envId })
+        });
+        
+        console.log(`📧 ${endpoint} - Status: ${testResp.status}`);
+        const responseText = await testResp.text();
+        console.log(`📧 ${endpoint} - Body: ${responseText.substring(0, 200)}...`);
+        
+        if (testResp.ok) {
+          console.log(`✅ SUCCESS with endpoint: ${endpoint}`);
+          return ok(res, { 
+            success: true, 
+            endpoint: endpoint,
+            status: testResp.status,
+            response: responseText,
+            message: 'Found working endpoint!'
+          });
+        }
+      } catch (error) {
+        console.log(`❌ ${endpoint} - Error: ${error.message}`);
+      }
     }
     
-    // For now, just return success with the response we got
-    return ok(res, { 
-      success: true, 
-      debug: true,
-      status: testUserResp.status,
-      response: responseText,
-      message: 'API call successful but needs parsing'
-    });
+    // If we get here, none of the endpoints worked
+    return fail(res, 'All Dynamic API endpoints returned 404 - check environment ID or API key permissions');
   } catch (e) {
     return fail(res, e?.message || String(e));
   }
